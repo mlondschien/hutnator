@@ -5,6 +5,16 @@ from email.mime.text import MIMEText
 
 config = pd.read_csv("config.csv")
 
+for row in config.itertuples():
+    if row.mail != f"{row.first.lower()}.{row.last.lower()}@stat.math.ethz.ch":
+        print(f"Mail of {row.first} {row.last} is {row.mail}.")
+
+if config['mail'].nunique() != len(config):
+    raise ValueError("Duplicate email addresses found.")
+
+if config['link'].nunique() != len(config):
+    raise ValueError("Duplicate links found.")
+
 # python send.py --username lmalte --password passw0rd --file 'mail.txt'
 @click.command()
 @click.option('--host', default='mail.ethz.ch', help='SMTP server hostname')
@@ -26,30 +36,34 @@ def main(host, port, username, password, file, recipient):
     sender = f"{username}@ethz.ch"
 
     if recipient is None:
-        recipients = config['first']
+        recipients = config.to_dict("records")
     else:
+        raise ValueError
         recipients = [recipient]
         if recipient not in config['first'].to_list():
             raise ValueError("Invalid recipient")
 
     for recipient in recipients:
-        recipient_address = config[lambda x: x['first']==recipient]['mail'].values[0]
+        recipient_address = recipient["mail"]
 
         list_of_links = ""
-        for row in config[lambda x: x['first']!=recipient].itertuples():
-            if not row.finished:
+        for row in config.itertuples():
+            if row.mail != recipient_address:
                 list_of_links += f"{row.first} {row.last}: {row.link}\n"
 
         with open(file, "r") as f:
             message = f.read()
 
-        message = message.format(first=recipient, list_of_links=list_of_links)
+        message = message.format(first=recipient['first'], list_of_links=list_of_links)
         mail = MIMEText(message)
         mail['From'] = sender
         mail['To'] = recipient_address
-        mail['Subject'] = "It's T-Shirt time!"
+        mail['Subject'] = "Here are (updated) polybox links for PhD t-shirt ideas"
 
-        # print(f"Sending mail {message} to {recipient_address}")
+        if recipient_address in message:
+            raise ValueError("Recipient address found in message")
+
+        print(f"Sending mail {message} to {recipient_address}")
         smtp.sendmail(sender, [recipient_address], mail.as_string())
     
 if __name__ == "__main__":
